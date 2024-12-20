@@ -32,7 +32,7 @@ class DocsReferenceServer {
     this.server = new Server(
       {
         name: 'docs-reference-server',
-        version: '0.2.0',
+        version: '1.0.0', // Using semantic versioning
       },
       {
         capabilities: {
@@ -83,7 +83,17 @@ class DocsReferenceServer {
               category: {
                 type: 'string',
                 description: 'Optional category to filter results',
-                enum: ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript'],
+                enum: [
+                  'handbook',
+                  'reference',
+                  'release-notes',
+                  'declaration-files', 
+                  'javascript',
+                  'configuration',
+                  'project-structure',
+                  'tooling',
+                  'best-practices'
+                ],
               },
             },
             required: ['query'],
@@ -157,7 +167,12 @@ class DocsReferenceServer {
     if (!this.isValidTypeScriptSearchArgs(args)) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        'Invalid arguments. Expected: { query: string, category?: string }'
+        'Invalid arguments for TypeScript docs search',
+        {
+          expected: '{ query: string, category?: string }',
+          received: JSON.stringify(args),
+          validCategories: ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript', 'configuration', 'project-structure', 'tooling', 'best-practices']
+        }
       );
     }
 
@@ -170,7 +185,12 @@ class DocsReferenceServer {
             type: 'text',
             text: JSON.stringify({
               message: `No results found for "${args.query}" in TypeScript documentation${args.category ? ` (${args.category})` : ''}`,
-              suggestion: 'Try a different search term or category'
+              suggestion: 'Try a different search term or category',
+              context: {
+                searchTerm: args.query,
+                category: args.category || 'all',
+                timestamp: new Date().toISOString()
+              }
             } as NoResultsResponse, null, 2),
           },
         ],
@@ -191,7 +211,12 @@ class DocsReferenceServer {
     if (!this.isValidNodeDocsSearchArgs(args)) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        'Invalid arguments. Expected: { query: string, version?: string }'
+        'Invalid arguments for Node.js docs search',
+        {
+          expected: '{ query: string, version?: string }',
+          received: JSON.stringify(args),
+          note: 'Version defaults to latest if not specified'
+        }
       );
     }
 
@@ -204,7 +229,12 @@ class DocsReferenceServer {
             type: 'text',
             text: JSON.stringify({
               message: `No results found for "${args.query}" in Node.js ${args.version || 'latest'} documentation`,
-              suggestion: 'Try a different search term or version'
+              suggestion: 'Try a different search term or version',
+              context: {
+                searchTerm: args.query,
+                version: args.version || 'latest',
+                timestamp: new Date().toISOString()
+              }
             } as NoResultsResponse, null, 2),
           },
         ],
@@ -228,7 +258,7 @@ class DocsReferenceServer {
       typeof (args as TypeScriptSearchArgs).query === 'string' &&
       (args as TypeScriptSearchArgs).query.length > 0 &&
       ((args as TypeScriptSearchArgs).category === undefined ||
-        ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript'].includes(
+        ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript', 'configuration', 'project-structure', 'tooling', 'best-practices'].includes(
           (args as TypeScriptSearchArgs).category!
         ))
     );
