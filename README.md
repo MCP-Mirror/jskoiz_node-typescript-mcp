@@ -1,104 +1,70 @@
-# Node TypeScript MCP Server
+# docs-reference-server MCP Server
 
-MCP server that provides documentation search capabilities for TypeScript and Node.js. It's designed to integrate with AI assistants that support the Model Context Protocol.
+learner-thing
+
+This is a TypeScript-based MCP server that implements a simple notes system. It demonstrates core MCP concepts by providing:
+
+- Resources representing text notes with URIs and metadata
+- Tools for creating new notes
+- Prompts for generating summaries of notes
 
 ## Features
 
-- **TypeScript Documentation Search**: Search through the TypeScript handbook for specific topics, concepts, and examples
-- **Node.js Documentation Search**: Search through Node.js API documentation across different versions
-- Real-time content fetching and parsing
-- Context-aware search results with relevant code snippets
-- Category-based filtering for TypeScript documentation
-- Version-specific searches for Node.js documentation
+### Resources
+- List and access notes via `note://` URIs
+- Each note has a title, content and metadata
+- Plain text mime type for simple content access
 
-## Installation
+### Tools
+- `create_note` - Create new text notes
+  - Takes title and content as required parameters
+  - Stores note in server state
 
-```bash
-# Clone the repository
-git clone https://github.com/jskoiz/node-typescript-mcp.git
-
-# Navigate to the project directory
-cd node-typescript-mcp
-
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-```
-
-## Usage
-
-The server provides two main tools that can be accessed through the MCP protocol:
-
-### 1. search_typescript_docs
-
-Search through TypeScript documentation with optional category filtering.
-
-```typescript
-{
-  name: 'search_typescript_docs',
-  arguments: {
-    query: string;  // e.g., "interfaces", "generics", "type guards"
-    category?: 'handbook' | 'reference' | 'release-notes' | 'declaration-files' | 'javascript'
-  }
-}
-```
-
-### 2. search_node_docs
-
-Search through Node.js documentation with optional version specification.
-
-```typescript
-{
-  name: 'search_node_docs',
-  arguments: {
-    query: string;  // e.g., "fs", "http", "buffer"
-    version?: string;  // defaults to 'latest'
-  }
-}
-```
+### Prompts
+- `summarize_notes` - Generate a summary of all stored notes
+  - Includes all note contents as embedded resources
+  - Returns structured prompt for LLM summarization
 
 ## Development
 
+Install dependencies:
 ```bash
-# Start the server in development mode
-npm start
+npm install
+```
 
-# Run the server with the MCP inspector
-npm run inspector
+Build the server:
+```bash
+npm run build
+```
 
-# Watch for changes during development
+For development with auto-rebuild:
+```bash
 npm run watch
 ```
 
-## Project Structure
+## Installation
 
+To use with Claude Desktop, add the server config:
+
+On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "docs-reference-server": {
+      "command": "/path/to/docs-reference-server/build/index.js"
+    }
+  }
+}
 ```
-.
-├── src/
-│   └── index.ts    # Main server implementation
-├── build/          # Compiled JavaScript output
-├── package.json    # Project configuration and dependencies
-└── tsconfig.json   # TypeScript configuration
+
+### Debugging
+
+Since MCP servers communicate over stdio, debugging can be challenging. We recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector), which is available as a package script:
+
+```bash
+npm run inspector
 ```
 
-## Dependencies
-
-- [@modelcontextprotocol/sdk](https://github.com/ModelContext/protocol): ^0.6.0
-- [axios](https://github.com/axios/axios): ^1.7.9
-- [cheerio](https://github.com/cheeriojs/cheerio): ^1.0.0
-- TypeScript: ^5.3.3
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT License
-
-## Acknowledgments
-
-- TypeScript Documentation: [typescriptlang.org](https://www.typescriptlang.org/docs/)
-- Node.js Documentation: [nodejs.org/docs](https://nodejs.org/docs/)
+The Inspector will provide a URL to access debugging tools in your browser.

@@ -1,6 +1,30 @@
 {
+  "name": "docs-reference-server",
+  "version": "0.1.0",
+  "description": "learner-thing",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "docs-reference-server": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "start": "node build/index.js",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "@types/cheerio": "^0.22.35",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "typescript": "^5.3.3"
   }
 }
