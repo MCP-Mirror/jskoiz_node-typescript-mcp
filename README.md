@@ -1,4 +1,4 @@
-# docs-reference-server MCP Server
+# MCP Server for Node and TypeScript documentation reference.
 
 learner-thing
 
