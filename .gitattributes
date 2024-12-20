@@ -1,7 +1,8 @@
-# Generated files
-package-lock.json linguist-generated=true
-build/* linguist-generated=true
+# Generated files (exclude from language stats)
+package-lock.json linguist-generated=true linguist-vendored=true
+package.json linguist-generated=true linguist-vendored=true
+build/* linguist-generated=true linguist-vendored=true
+*.json linguist-generated=true linguist-vendored=true
 
-# Source code
-*.ts linguist-language=TypeScript
-*.js linguist-language=JavaScript
+# Source code (explicitly mark TypeScript)
+*.ts linguist-language=TypeScript linguist-detectable=true
