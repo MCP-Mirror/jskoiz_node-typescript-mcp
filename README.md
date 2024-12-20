@@ -1,6 +1,6 @@
-# Node TypeScript MCP (Model Context Protocol) Server
+# Node TypeScript MCP Server
 
-This repository contains a TypeScript implementation of an MCP (Model Context Protocol) server that provides documentation search capabilities for TypeScript and Node.js. It's designed to integrate with AI assistants that support the Model Context Protocol.
+MCP server that provides documentation search capabilities for TypeScript and Node.js. It's designed to integrate with AI assistants that support the Model Context Protocol.
 
 ## Features
 

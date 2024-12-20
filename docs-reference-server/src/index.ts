@@ -7,38 +7,28 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-interface SearchResult {
-  title: string;
-  url: string,
-  description: string;
-  context?: string;
-  category?: string;
-}
-
-interface TypeScriptSearchArgs {
-  query: string;
-  category?: 'handbook' | 'reference' | 'release-notes' | 'declaration-files' | 'javascript';
-}
-
-interface NodeDocsSearchArgs {
-  query: string;
-  version?: string;
-}
-
-interface NoResultsResponse {
-  message: string;
-  suggestion: string;
-}
+import { DocsService } from './services/docs-service.js';
+import { Logger } from './utils/logger.js';
+import { NoResultsResponse, McpToolResponse, TypeScriptSearchArgs, NodeDocsSearchArgs } from './types.js';
 
 class DocsReferenceServer {
   private server: Server;
-  private typescriptBaseUrl = 'https://www.typescriptlang.org/docs/handbook/2';
-  private nodeBaseUrl = 'https://nodejs.org/docs/latest/api';
+  private docsService: DocsService;
+  private logger: Logger;
 
   constructor() {
+    this.logger = Logger.getInstance();
+    this.docsService = DocsService.getInstance();
+    
+    // Set log level from environment variable if provided
+    const logLevel = process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error';
+    if (logLevel) {
+      this.logger.setLevel(logLevel);
+      this.logger.debug('Log level set from environment', { level: logLevel });
+    }
+
+    this.logger.debug('Initializing server...');
+
     this.server = new Server(
       {
         name: 'docs-reference-server',
@@ -52,15 +42,32 @@ class DocsReferenceServer {
     );
 
     this.setupToolHandlers();
+    this.setupErrorHandling();
+  }
 
-    this.server.onerror = (error) => console.error('[MCP Error]', error);
+  private setupErrorHandling(): void {
+    this.server.onerror = (error) => {
+      this.logger.error('Server error:', { error: error.message, stack: error.stack });
+    };
+
+    process.on('uncaughtException', (error) => {
+      this.logger.error('Uncaught exception:', { error: error.message, stack: error.stack });
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason) => {
+      this.logger.error('Unhandled rejection:', { reason });
+      process.exit(1);
+    });
+
     process.on('SIGINT', async () => {
+      this.logger.info('Received SIGINT signal, shutting down...');
       await this.server.close();
       process.exit(0);
     });
   }
 
-  private setupToolHandlers() {
+  private setupToolHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
@@ -104,225 +111,83 @@ class DocsReferenceServer {
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      switch (request.params.name) {
-        case 'search_typescript_docs':
-          return await this.handleTypeScriptDocsSearch(request.params.arguments);
-        case 'search_node_docs':
-          return await this.handleNodeDocsSearch(request.params.arguments);
-        default:
-          throw new McpError(
-            ErrorCode.MethodNotFound,
-            `Unknown tool: ${request.params.name}`
-          );
+      const { name, arguments: args } = request.params;
+      this.logger.debug('→ Received request', { tool: name, args });
+
+      try {
+        let result;
+        switch (name) {
+          case 'search_typescript_docs':
+            this.logger.info(`Searching TypeScript docs for "${(args as any).query}"`);
+            result = await this.handleTypeScriptDocsSearch(args);
+            const tsResults = JSON.parse(result.content[0].text);
+            if ('message' in tsResults) {
+              this.logger.warn('No TypeScript docs results found');
+            } else {
+              this.logger.info(`Found ${tsResults.length} TypeScript docs results`);
+            }
+            return result;
+          case 'search_node_docs':
+            this.logger.info(`Searching Node.js docs for "${(args as any).query}"`);
+            result = await this.handleNodeDocsSearch(args);
+            const nodeResults = JSON.parse(result.content[0].text);
+            if ('message' in nodeResults) {
+              this.logger.warn('No Node.js docs results found');
+            } else {
+              this.logger.info(`Found ${nodeResults.length} Node.js docs results`);
+            }
+            return result;
+          default:
+            throw new McpError(
+              ErrorCode.MethodNotFound,
+              `Unknown tool: ${request.params.name}`
+            );
+        }
+      } catch (error) {
+        this.logger.error('Error handling tool request:', { 
+          tool: request.params.name,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        throw error;
       }
     });
   }
 
-  private async handleTypeScriptDocsSearch(args: any): Promise<{ content: { type: string; text: string; }[] }> {
+  private async handleTypeScriptDocsSearch(args: unknown): Promise<McpToolResponse> {
     if (!this.isValidTypeScriptSearchArgs(args)) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        'Invalid arguments. Expected: { query: string, category?: "handbook" | "reference" | "release-notes" | "declaration-files" | "javascript" }'
+        'Invalid arguments. Expected: { query: string, category?: string }'
       );
     }
 
-    try {
-      // TypeScript v2 handbook pages
-      const pages = [
-        'objects.html',
-        'types-from-types.html',
-        'classes.html',
-        'generics.html',
-        'utility-types.html',
-        'functions.html',
-        'type-manipulation.html'
-      ];
+    const results = await this.docsService.searchTypeScriptDocs(args);
 
-      const results: SearchResult[] = [];
-      const queryLower = args.query.toLowerCase();
-
-      // Search through each page
-      for (const page of pages) {
-        try {
-          const url = `${this.typescriptBaseUrl}/${page}`;
-          const response = await axios.get(url);
-          const $ = cheerio.load(response.data);
-          
-          // Search through main content
-          $('#handbook-content').find('h1, h2, h3, h4, p, code, pre').each((_, element) => {
-            const $element = $(element);
-            const text = $element.text().toLowerCase();
-            
-            if (text.includes(queryLower)) {
-              const $section = $element.closest('section');
-              const $heading = $section.find('h1, h2, h3').first();
-              const title = $heading.text().trim() || $element.closest('article').find('h1').first().text().trim();
-              const description = $section.find('p').first().text().trim() || 'No description available';
-              const id = $heading.attr('id') || $element.closest('[id]').attr('id') || '';
-              
-              // Only add if we haven't already added this section
-              const fullUrl = id ? `${url}#${id}` : url;
-              if (title && !results.some(r => r.url === fullUrl)) {
-                const matchIndex = text.indexOf(queryLower);
-                results.push({
-                  title,
-                  url: fullUrl,
-                  description,
-                  context: text.substring(
-                    Math.max(0, matchIndex - 50),
-                    Math.min(text.length, matchIndex + queryLower.length + 50)
-                  ),
-                  category: 'handbook-v2'
-                });
-              }
-            }
-          });
-        } catch (error) {
-          console.error(`Error fetching page ${page}:`, error);
-          // Continue with other pages even if one fails
-          continue;
-        }
-      }
-
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                message: `No results found for "${args.query}" in TypeScript documentation${args.category ? ` (${args.category})` : ''}`,
-                suggestion: 'Try a different search term or category'
-              } as NoResultsResponse, null, 2),
-            },
-          ],
-        };
-      }
-
+    if (results.length === 0) {
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(results, null, 2),
+            text: JSON.stringify({
+              message: `No results found for "${args.query}" in TypeScript documentation${args.category ? ` (${args.category})` : ''}`,
+              suggestion: 'Try a different search term or category'
+            } as NoResultsResponse, null, 2),
           },
         ],
       };
-    } catch (error) {
-      if (error instanceof McpError) {
-        throw error;
-      }
-      console.error('Error fetching TypeScript documentation:', error);
-      throw new McpError(ErrorCode.InternalError, 'Failed to fetch TypeScript documentation');
     }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(results, null, 2),
+        },
+      ],
+    };
   }
 
-  private isValidTypeScriptSearchArgs(args: any): args is TypeScriptSearchArgs {
-    return (
-      typeof args === 'object' &&
-      args !== null &&
-      typeof args.query === 'string' &&
-      args.query.length > 0 &&
-      (args.category === undefined ||
-        ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript'].includes(args.category))
-    );
-  }
-
-  private isValidNodeDocsSearchArgs(args: any): args is NodeDocsSearchArgs {
-    return (
-      typeof args === 'object' &&
-      args !== null &&
-      typeof args.query === 'string' &&
-      args.query.length > 0 &&
-      (args.version === undefined || typeof args.version === 'string')
-    );
-  }
-
-  private validateNodeVersion(version?: string): string {
-    const validVersion = version || 'latest';
-    if (validVersion !== 'latest' && !validVersion.match(/^\d+\.\d+\.\d+$/)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        'Invalid version format. Must be "latest" or follow semver (e.g., "18.0.0")'
-      );
-    }
-    return validVersion;
-  }
-
-  private async fetchNodeDocs(version: string, query: string): Promise<SearchResult[]> {
-    const baseUrl = version === 'latest' 
-      ? 'https://nodejs.org/docs/latest/api'
-      : `https://nodejs.org/docs/v${version}/api`;
-
-    try {
-      // First get the index page to find all module pages
-      const indexResponse = await axios.get(`${baseUrl}/index.html`);
-      const $index = cheerio.load(indexResponse.data);
-      const results: SearchResult[] = [];
-      const queryLower = query.toLowerCase();
-
-      // Get all module links from the navigation
-      const moduleLinks = $index('#column2 a[href]')
-        .map((_, el) => $index(el).attr('href'))
-        .get()
-        .filter(href => href.endsWith('.html'));
-
-      // Search through each module page
-      for (const moduleLink of moduleLinks) {
-        try {
-          const moduleUrl = `${baseUrl}/${moduleLink}`;
-          const moduleResponse = await axios.get(moduleUrl);
-          const $ = cheerio.load(moduleResponse.data);
-
-          $('#apicontent').find('section, div.api_stability, pre.api_metadata').each((_: number, element) => {
-            const $element = $(element);
-            const text = $element.text().toLowerCase();
-
-            if (text.includes(queryLower)) {
-              const $section = $element.closest('section');
-              const title = $section.find('h2, h3').first().text().trim() || 
-                           moduleLink.replace('.html', '').replace('_', ' ');
-              const description = $section.find('p').first().text().trim();
-              const id = $element.closest('[id]').attr('id');
-
-              if (title) {
-                const matchIndex = text.indexOf(queryLower);
-                results.push({
-                  title,
-                  url: id ? `${moduleUrl}#${id}` : moduleUrl,
-                  description: description || `Documentation from ${title} module`,
-                  context: text.substring(
-                    Math.max(0, matchIndex - 50),
-                    Math.min(text.length, matchIndex + queryLower.length + 50)
-                  ),
-                });
-              }
-            }
-          });
-        } catch (error) {
-          console.error(`Error fetching module ${moduleLink}:`, error);
-          // Continue with other modules even if one fails
-          continue;
-        }
-      }
-
-      return results;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
-          throw new McpError(
-            ErrorCode.InvalidParams,
-            `Node.js documentation not found for version ${version}. Try using "latest" or a different version.`
-          );
-        }
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to fetch Node.js documentation: ${error.message}`
-        );
-      }
-      throw error;
-    }
-  }
-
-  private async handleNodeDocsSearch(args: any): Promise<{ content: { type: string; text: string; }[] }> {
+  private async handleNodeDocsSearch(args: unknown): Promise<McpToolResponse> {
     if (!this.isValidNodeDocsSearchArgs(args)) {
       throw new McpError(
         ErrorCode.InvalidParams,
@@ -330,51 +195,67 @@ class DocsReferenceServer {
       );
     }
 
-    const version = this.validateNodeVersion(args.version);
-    
-    try {
-      const results = await this.fetchNodeDocs(version, args.query);
+    const results = await this.docsService.searchNodeDocs(args);
 
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                message: `No results found for "${args.query}" in Node.js ${version} documentation`,
-                suggestion: 'Try a different search term or version'
-              } as NoResultsResponse, null, 2),
-            },
-          ],
-        };
-      }
-
+    if (results.length === 0) {
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(results, null, 2),
+            text: JSON.stringify({
+              message: `No results found for "${args.query}" in Node.js ${args.version || 'latest'} documentation`,
+              suggestion: 'Try a different search term or version'
+            } as NoResultsResponse, null, 2),
           },
         ],
       };
-    } catch (error) {
-      if (error instanceof McpError) {
-        throw error;
-      }
-      console.error('Error searching Node.js documentation:', error);
-      throw new McpError(
-        ErrorCode.InternalError,
-        'An unexpected error occurred while searching Node.js documentation'
-      );
     }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(results, null, 2),
+        },
+      ],
+    };
   }
 
-  async run() {
+  private isValidTypeScriptSearchArgs(args: unknown): args is TypeScriptSearchArgs {
+    return (
+      typeof args === 'object' &&
+      args !== null &&
+      typeof (args as TypeScriptSearchArgs).query === 'string' &&
+      (args as TypeScriptSearchArgs).query.length > 0 &&
+      ((args as TypeScriptSearchArgs).category === undefined ||
+        ['handbook', 'reference', 'release-notes', 'declaration-files', 'javascript'].includes(
+          (args as TypeScriptSearchArgs).category!
+        ))
+    );
+  }
+
+  private isValidNodeDocsSearchArgs(args: unknown): args is NodeDocsSearchArgs {
+    return (
+      typeof args === 'object' &&
+      args !== null &&
+      typeof (args as NodeDocsSearchArgs).query === 'string' &&
+      (args as NodeDocsSearchArgs).query.length > 0 &&
+      ((args as NodeDocsSearchArgs).version === undefined ||
+        typeof (args as NodeDocsSearchArgs).version === 'string')
+    );
+  }
+
+  async run(): Promise<void> {
+    this.logger.debug('Starting server...');
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Docs Reference MCP server running on stdio');
+    this.logger.info('✓ Docs Reference server ready');
   }
 }
 
 const server = new DocsReferenceServer();
-server.run().catch(console.error);
+server.run().catch((error) => {
+  const logger = Logger.getInstance();
+  logger.error('Fatal error:', { error: error.message, stack: error.stack });
+  process.exit(1);
+});
