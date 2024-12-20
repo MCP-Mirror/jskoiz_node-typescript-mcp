@@ -7,18 +7,18 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import { DocsService } from './services/docs-service.js';
+import { DocsServiceRegistry } from './services/docs-service-registry.js';
 import { Logger } from './utils/logger.js';
 import { NoResultsResponse, McpToolResponse, TypeScriptSearchArgs, NodeDocsSearchArgs } from './types.js';
 
 class DocsReferenceServer {
   private server: Server;
-  private docsService: DocsService;
+  private serviceRegistry: DocsServiceRegistry;
   private logger: Logger;
 
   constructor() {
     this.logger = Logger.getInstance();
-    this.docsService = DocsService.getInstance();
+    this.serviceRegistry = DocsServiceRegistry.getInstance();
     
     // Set log level from environment variable if provided
     const logLevel = process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error';
@@ -176,7 +176,7 @@ class DocsReferenceServer {
       );
     }
 
-    const results = await this.docsService.searchTypeScriptDocs(args);
+    const results = await this.serviceRegistry.getService<TypeScriptSearchArgs>('typescript').search(args);
 
     if (results.length === 0) {
       return {
@@ -220,7 +220,7 @@ class DocsReferenceServer {
       );
     }
 
-    const results = await this.docsService.searchNodeDocs(args);
+    const results = await this.serviceRegistry.getService<NodeDocsSearchArgs>('node').search(args);
 
     if (results.length === 0) {
       return {
