@@ -1,7 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
 ### Major Changes
 - Moved documentation files out of version control, now downloaded during build
 - Completely refactored documentation search system from web scraping to local file processing

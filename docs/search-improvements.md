@@ -1,4 +1,4 @@
-# TypeScript Docs Search Improvements Proposal
+# TypeScript Docs Search Improvements
 
 ## Current Implementation Analysis
 
