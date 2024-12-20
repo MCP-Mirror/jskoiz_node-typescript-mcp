@@ -1,13 +1,54 @@
-import * as cheerio from 'cheerio';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { SearchResult, NodeDocsSearchArgs } from '../types.js';
 import { BaseDocsService } from './base-docs-service.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { MarkdownProcessor } from './preprocessing/markdown-processor.js';
+import { SearchIndexBuilder } from './preprocessing/index-builder.js';
 
 export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
   private static instance: NodeDocsService;
+  private readonly docsPath: string;
+  private readonly processor: MarkdownProcessor;
+  private readonly indexBuilder: SearchIndexBuilder;
+
+  // Map of category names to their directory paths
+  private readonly categoryPaths = {
+    'core': ['.'],  // All Node.js docs are in the root directory
+  };
 
   private constructor() {
     super();
+    this.docsPath = join('/Users/jk/Desktop/Cline/MCP', 'node-docs', 'copy');
+    this.processor = new MarkdownProcessor(this.docsPath);
+    this.indexBuilder = new SearchIndexBuilder(this.docsPath);
+    
+    // Initialize search index
+    this.initialize().catch(error => {
+      this.logger.error('Failed to initialize Node.js docs service:', error);
+    });
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      // Try to load existing index
+      const loaded = await this.indexBuilder.loadIndex();
+      if (!loaded) {
+        // Build new index if loading fails
+        this.logger.info('Building new search index...');
+        const docs = await this.processor.processAllDocs(this.categoryPaths);
+        await this.indexBuilder.buildIndex(docs);
+        this.logger.info('Search index built successfully');
+      } else {
+        this.logger.info('Search index loaded successfully');
+      }
+    } catch (error) {
+      this.logger.error('Error initializing search index:', error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Failed to initialize Node.js documentation search'
+      );
+    }
   }
 
   static getInstance(): NodeDocsService {
@@ -21,83 +62,42 @@ export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
     return 'node';
   }
 
-  private validateVersion(version?: string): string {
-    const validVersion = version || 'latest';
-    if (validVersion !== 'latest' && !validVersion.match(/^\d+\.\d+\.\d+$/)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        'Invalid version format. Must be "latest" or follow semver (e.g., "18.0.0")'
-      );
-    }
-    return validVersion;
-  }
-
   async search(args: NodeDocsSearchArgs): Promise<SearchResult[]> {
-    const version = this.validateVersion(args.version);
-    const cacheKey = this.getCacheKey({ ...args, version });
-    const cachedResults = this.cache.get<SearchResult[]>(cacheKey);
-    if (cachedResults) return cachedResults;
-
-    const baseUrl = version === 'latest' 
-      ? 'https://nodejs.org/api'
-      : `https://nodejs.org/docs/v${version}/api`;
-
     try {
-      this.logger.debug('Fetching Node.js index page', { baseUrl });
-      const indexHtml = await this.fetchWithRetry(`${baseUrl}/index.html`);
-      const $index = cheerio.load(indexHtml);
-      const results: SearchResult[] = [];
-      const queryLower = args.query.toLowerCase();
-
-      // Get module links from the navigation
-      const moduleLinks = $index('#column2 a[href], nav a[href]')
-        .map((_, el) => $index(el).attr('href'))
-        .get()
-        .filter((href): href is string => 
-          typeof href === 'string' && href.endsWith('.html')
-        );
-
-      this.logger.debug('Found module links', { count: moduleLinks.length });
-
-      for (const moduleLink of moduleLinks) {
-        try {
-          const moduleUrl = `${baseUrl}/${moduleLink}`;
-          this.logger.debug('Fetching module page', { moduleUrl });
-          const moduleHtml = await this.fetchWithRetry(moduleUrl);
-          const $ = cheerio.load(moduleHtml);
-
-          $('#apicontent, main').find('section, div.api_stability, pre.api_metadata').each((_, element) => {
-            const $element = $(element);
-            const text = $element.text().toLowerCase();
-
-            if (text.includes(queryLower)) {
-              const $section = $element.closest('section');
-              const title = $section.find('h2, h3').first().text().trim() || 
-                           moduleLink.replace('.html', '').replace('_', ' ');
-              const description = $section.find('p').first().text().trim();
-              const id = $element.closest('[id]').attr('id');
-
-              if (title) {
-                const matchIndex = text.indexOf(queryLower);
-                results.push({
-                  title,
-                  url: id ? `${moduleUrl}#${id}` : moduleUrl,
-                  description: description || `Documentation from ${title} module`,
-                  context: text.substring(
-                    Math.max(0, matchIndex - 50),
-                    Math.min(text.length, matchIndex + queryLower.length + 50)
-                  ),
-                });
-              }
-            }
-          });
-        } catch (error) {
-          this.logger.error(`Error fetching Node.js module ${moduleLink}:`, error);
-          continue;
-        }
+      // Get cached results if available
+      const cacheKey = this.getCacheKey(args);
+      const cachedResults = await this.cache.get<SearchResult[]>(cacheKey);
+      if (cachedResults) {
+        return cachedResults;
       }
 
-      this.cache.set(cacheKey, results);
+      const searchResults = this.indexBuilder.search(args.query);
+
+      // Convert to minimal SearchResult format
+      const results = searchResults.map(result => {
+        const storedFields = this.indexBuilder.getStoredFields(result.id);
+        
+        if (!storedFields.path) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            'Document path not found in search index'
+          );
+        }
+
+        return {
+          title: storedFields.title || 'Untitled',
+          url: `file://${join(this.docsPath, storedFields.path)}`,
+          description: result.match, // Already truncated in index-builder
+          category: storedFields.category || 'core',
+          score: result.score
+        };
+      });
+
+      // Cache results
+      await this.cache.set(cacheKey, results, {
+        memoryOnly: true // Keep in memory only to avoid disk I/O
+      });
+      
       return results;
     } catch (error) {
       throw this.handleError(error);

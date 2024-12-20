@@ -1,7 +1,7 @@
 {
   "name": "docs-reference-server",
   "version": "0.1.0",
-  "description": "learner-thing",
+  "description": "MCP server providing TypeScript and Node.js documentation search capabilities",
   "private": true,
   "type": "module",
   "bin": {
@@ -19,9 +19,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
-    "@types/cheerio": "^0.22.35",
-    "axios": "^1.7.9",
-    "cheerio": "^1.0.0"
+    "@types/marked": "^6.0.0",
+    "marked": "^15.0.4",
+    "minisearch": "^7.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.10",

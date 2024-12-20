@@ -13,7 +13,7 @@ export interface TypeScriptSearchArgs {
 
 export interface NodeDocsSearchArgs {
   query: string;
-  version?: string;
+  category?: 'core';
 }
 
 export interface NoResultsResponse {

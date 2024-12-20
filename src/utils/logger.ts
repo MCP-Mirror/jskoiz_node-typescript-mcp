@@ -20,7 +20,7 @@ export class Logger {
     warn: 2,
     error: 3
   };
-  private currentLevel: LogLevel = 'info';
+  private currentLevel: LogLevel = 'debug';
   private readonly logFile: string;
 
   private constructor() {

@@ -3,3 +3,15 @@ build/
 .DS_Store
 *.log
 docs-reference-server@*
+
+# Documentation directories
+node-docs/copy/
+ts-docs/copy/
+
+# Cache directories
+**/cache/
+*.cache
+*.cache.json
+
+# Keep preprocessing code
+!src/services/preprocessing/

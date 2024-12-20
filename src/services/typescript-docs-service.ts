@@ -1,22 +1,58 @@
-import * as cheerio from 'cheerio';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { SearchResult, TypeScriptSearchArgs } from '../types.js';
 import { BaseDocsService } from './base-docs-service.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { MarkdownProcessor } from './preprocessing/markdown-processor.js';
+import { SearchIndexBuilder } from './preprocessing/index-builder.js';
 
 export class TypeScriptDocsService extends BaseDocsService<TypeScriptSearchArgs> {
   private static instance: TypeScriptDocsService;
-  private readonly baseUrl = 'https://www.typescriptlang.org/docs/handbook/2';
-  private readonly pages = [
-    'objects.html',
-    'types-from-types.html',
-    'classes.html',
-    'generics.html',
-    'utility-types.html',
-    'functions.html',
-    'type-manipulation.html'
-  ];
+  private readonly docsPath: string;
+  private readonly processor: MarkdownProcessor;
+  private readonly indexBuilder: SearchIndexBuilder;
+  
+  // Map of category names to their directory paths
+  private readonly categoryPaths = {
+    'handbook': ['handbook-v1', 'handbook-v2'],
+    'reference': ['reference'],
+    'release-notes': ['release-notes'],
+    'declaration-files': ['declaration-files'],
+    'javascript': ['javascript']
+  };
 
   private constructor() {
     super();
+    this.docsPath = join('/Users/jk/Desktop/Cline/MCP', 'ts-docs', 'copy', 'en');
+    this.processor = new MarkdownProcessor(this.docsPath);
+    this.indexBuilder = new SearchIndexBuilder(this.docsPath);
+    
+    // Initialize search index
+    this.initialize().catch(error => {
+      this.logger.error('Failed to initialize TypeScript docs service:', error);
+    });
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      // Try to load existing index
+      const loaded = await this.indexBuilder.loadIndex();
+      if (!loaded) {
+        // Build new index if loading fails
+        this.logger.info('Building new search index...');
+        const docs = await this.processor.processAllDocs(this.categoryPaths);
+        await this.indexBuilder.buildIndex(docs);
+        this.logger.info('Search index built successfully');
+      } else {
+        this.logger.info('Search index loaded successfully');
+      }
+    } catch (error) {
+      this.logger.error('Error initializing search index:', error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Failed to initialize TypeScript documentation search'
+      );
+    }
   }
 
   static getInstance(): TypeScriptDocsService {
@@ -30,61 +66,55 @@ export class TypeScriptDocsService extends BaseDocsService<TypeScriptSearchArgs>
     return 'typescript';
   }
 
+
   async search(args: TypeScriptSearchArgs): Promise<SearchResult[]> {
-    const cacheKey = this.getCacheKey(args);
-    const cachedResults = this.cache.get<SearchResult[]>(cacheKey);
-    if (cachedResults) return cachedResults;
-
-    const results: SearchResult[] = [];
-    const queryLower = args.query.toLowerCase();
-
     try {
-      for (const page of this.pages) {
-        try {
-          const url = `${this.baseUrl}/${page}`;
-          const html = await this.fetchWithRetry(url);
-          const $ = cheerio.load(html);
-          
-          $('#handbook-content').find('h1, h2, h3, h4, p, code, pre').each((_, element) => {
-            const $element = $(element);
-            const text = $element.text().toLowerCase();
-            
-            if (text.includes(queryLower)) {
-              const $section = $element.closest('section');
-              const $heading = $section.find('h1, h2, h3').first();
-              const title = $heading.text().trim() || 
-                           $element.closest('article').find('h1').first().text().trim();
-              const description = $section.find('p').first().text().trim() || 
-                                'No description available';
-              const id = $heading.attr('id') || 
-                        $element.closest('[id]').attr('id') || '';
-              
-              const fullUrl = id ? `${url}#${id}` : url;
-              if (title && !results.some(r => r.url === fullUrl)) {
-                const matchIndex = text.indexOf(queryLower);
-                results.push({
-                  title,
-                  url: fullUrl,
-                  description,
-                  context: text.substring(
-                    Math.max(0, matchIndex - 50),
-                    Math.min(text.length, matchIndex + queryLower.length + 50)
-                  ),
-                  category: args.category || 'handbook-v2'
-                });
-              }
-            }
-          });
-        } catch (error) {
-          this.logger.error(`Error fetching TypeScript page ${page}:`, error);
-          continue;
-        }
+      // Get cached results if available
+      const cacheKey = this.getCacheKey(args);
+      const cachedResults = await this.cache.get<SearchResult[]>(cacheKey);
+      if (cachedResults) {
+        return cachedResults;
       }
 
-      this.cache.set(cacheKey, results);
+      const searchResults = this.indexBuilder.search(args.query, {
+        category: args.category
+      });
+
+      // Convert to minimal SearchResult format
+      const results = searchResults.map(result => {
+        const storedFields = this.indexBuilder.getStoredFields(result.id);
+        
+        if (!storedFields.path) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            'Document path not found in search index'
+          );
+        }
+
+        return {
+          title: storedFields.title || 'Untitled',
+          url: `file://${join(this.docsPath, storedFields.path)}`,
+          description: result.match, // Already truncated in index-builder
+          category: storedFields.category || 'uncategorized',
+          score: result.score
+        };
+      });
+
+      // Cache results
+      await this.cache.set(cacheKey, results, {
+        memoryOnly: true // Keep in memory only to avoid disk I/O
+      });
+      
       return results;
     } catch (error) {
-      throw this.handleError(error);
+      this.logger.error('Search failed:', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Failed to search TypeScript documentation'
+      );
     }
   }
 }

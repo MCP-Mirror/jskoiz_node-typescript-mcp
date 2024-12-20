@@ -109,9 +109,10 @@ class DocsReferenceServer {
                 type: 'string',
                 description: 'Search query (e.g., "fs", "http", "buffer")',
               },
-              version: {
+              category: {
                 type: 'string',
-                description: 'Optional Node.js version (defaults to latest)',
+                description: 'Optional category to filter results',
+                enum: ['core'],
               },
             },
             required: ['query'],
@@ -213,9 +214,9 @@ class DocsReferenceServer {
         ErrorCode.InvalidParams,
         'Invalid arguments for Node.js docs search',
         {
-          expected: '{ query: string, version?: string }',
+          expected: '{ query: string, category?: string }',
           received: JSON.stringify(args),
-          note: 'Version defaults to latest if not specified'
+          validCategories: ['core']
         }
       );
     }
@@ -228,11 +229,11 @@ class DocsReferenceServer {
           {
             type: 'text',
             text: JSON.stringify({
-              message: `No results found for "${args.query}" in Node.js ${args.version || 'latest'} documentation`,
-              suggestion: 'Try a different search term or version',
+              message: `No results found for "${args.query}" in Node.js documentation${args.category ? ` (${args.category})` : ''}`,
+              suggestion: 'Try a different search term or category',
               context: {
                 searchTerm: args.query,
-                version: args.version || 'latest',
+                category: args.category || 'core',
                 timestamp: new Date().toISOString()
               }
             } as NoResultsResponse, null, 2),
@@ -270,8 +271,8 @@ class DocsReferenceServer {
       args !== null &&
       typeof (args as NodeDocsSearchArgs).query === 'string' &&
       (args as NodeDocsSearchArgs).query.length > 0 &&
-      ((args as NodeDocsSearchArgs).version === undefined ||
-        typeof (args as NodeDocsSearchArgs).version === 'string')
+      ((args as NodeDocsSearchArgs).category === undefined ||
+        (args as NodeDocsSearchArgs).category === 'core')
     );
   }
 
