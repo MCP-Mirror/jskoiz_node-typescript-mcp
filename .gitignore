@@ -5,8 +5,8 @@ build/
 docs-reference-server@*
 
 # Documentation directories
-node-docs/copy/
-ts-docs/copy/
+node-docs/
+ts-docs/
 
 # Cache directories
 **/cache/

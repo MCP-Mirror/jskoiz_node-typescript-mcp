@@ -11,7 +11,8 @@
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "setup-docs": "node scripts/setup-docs.js",
+    "build": "npm run setup-docs && tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepare": "npm run build",
     "start": "node build/index.js",
     "watch": "tsc --watch",

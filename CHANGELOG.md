@@ -3,9 +3,18 @@
 ## [Unreleased]
 
 ### Major Changes
+- Moved documentation files out of version control, now downloaded during build
 - Completely refactored documentation search system from web scraping to local file processing
 - Implemented new search indexing system for improved performance and accuracy
 - Added support for local documentation files instead of fetching from web
+
+### Infrastructure Changes
+- Added setup-docs script to automatically download and setup documentation during build
+- Documentation is now fetched from official repositories during build:
+  - TypeScript: microsoft/TypeScript-Website
+  - Node.js: nodejs/node
+- Reduced repository size by removing pre-fetched documentation
+- Documentation now stays current with source repositories
 
 ### Dependencies
 #### Added
