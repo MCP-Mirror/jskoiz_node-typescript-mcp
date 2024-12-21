@@ -5,6 +5,7 @@ A TypeScript-based MCP server that provides modular access to various documentat
 ## Documentation Sources
 
 Currently supported documentation sources:
+
 - **TypeScript**: Official TypeScript documentation including handbook, reference, release notes, and more
 - **Node.js**: Core Node.js documentation
 - **Discord.js**: Official Discord.js guide and documentation
@@ -12,6 +13,7 @@ Currently supported documentation sources:
 ## Installation
 
 Install dependencies:
+
 ```bash
 npm install
 ```
@@ -48,7 +50,7 @@ npm run watch
 - `search_typescript_docs` - Search TypeScript documentation
   - Takes search query and optional category filter
   - Supports handbook, reference, release notes, declaration files, and JavaScript categories
-  
+
 - `search_node_docs` - Search Node.js documentation
   - Takes search query and optional version filter
   - Returns relevant documentation matches with context
