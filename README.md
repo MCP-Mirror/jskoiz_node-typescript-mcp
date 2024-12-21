@@ -71,8 +71,8 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
-    "docs-reference-server": {
-      "command": "/path/to/docs-reference-server/build/index.js"
+    "mcp-documentation-reference-server": {
+      "command": "/path/to/mcp-documentation-reference-server/build/index.js"
     }
   }
 }

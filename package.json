@@ -1,7 +1,7 @@
 {
-  "name": "docs-reference-server",
+  "name": "mcp-documentation-reference-server",
   "version": "0.1.0",
-  "description": "MCP server providing TypeScript and Node.js documentation search capabilities",
+  "description": "MCP server providing modular access to TypeScript, Node.js, and Discord.js documentation",
   "private": true,
   "type": "module",
   "bin": {
