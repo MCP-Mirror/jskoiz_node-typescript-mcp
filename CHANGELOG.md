@@ -60,3 +60,35 @@
   - Added category parameter for both TypeScript and Node.js searches
 - Modified search result format to include scores and categories
 - Changed URL format to use local file paths instead of web URLs
+
+### Modular Documentation System
+- Implemented configurable documentation source system
+- Added selective documentation installation:
+  - Interactive selection mode
+  - Individual source installation scripts
+  - All-sources installation option
+- Created configuration-driven documentation source management
+- Added support for easy addition of new documentation sources
+- Improved build process to handle selective documentation setup
+
+### Discord.js Documentation
+- Added support for Discord.js guide documentation
+- Implemented new documentation categories:
+  - preparations
+  - creating-your-bot
+  - slash-commands
+  - interactions
+  - message-components
+  - popular-topics
+  - voice
+  - additional-features
+  - improving-dev-environment
+  - miscellaneous
+- Added search support for Discord.js guide content
+- Integrated with modular documentation system
+
+### Infrastructure Improvements
+- Added docs-config.js for centralized documentation source configuration
+- Updated setup scripts to support selective installation
+- Added new npm scripts for individual documentation setup
+- Improved documentation organization and structure

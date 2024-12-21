@@ -1,6 +1,7 @@
 import { BaseDocsService, BaseSearchArgs } from './base-docs-service.js';
 import { TypeScriptDocsService } from './typescript-docs-service.js';
 import { NodeDocsService } from './node-docs-service.js';
+import { DiscordDocsService } from './discord-docs-service.js';
 import { Logger } from '../utils/logger.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
@@ -25,6 +26,7 @@ export class DocsServiceRegistry {
   private registerDefaultServices(): void {
     this.register('typescript', TypeScriptDocsService.getInstance());
     this.register('node', NodeDocsService.getInstance());
+    this.register('discord', DiscordDocsService.getInstance());
   }
 
   register(name: string, service: BaseDocsService<BaseSearchArgs>): void {

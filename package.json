@@ -12,8 +12,12 @@
   ],
   "scripts": {
     "setup-docs": "node scripts/setup-docs.js",
-    "build": "npm run setup-docs && tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
-    "prepare": "npm run build",
+    "setup-docs:all": "node scripts/setup-docs.js all",
+    "setup-docs:typescript": "node scripts/setup-docs.js typescript",
+    "setup-docs:node": "node scripts/setup-docs.js node",
+    "setup-docs:discord": "node scripts/setup-docs.js discord",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run setup-docs:all && npm run build",
     "start": "node build/index.js",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"

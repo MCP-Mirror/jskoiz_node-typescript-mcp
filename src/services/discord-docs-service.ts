@@ -1,31 +1,46 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { SearchResult, NodeDocsSearchArgs } from '../types.js';
-import { BaseDocsService } from './base-docs-service.js';
+import { SearchResult } from '../types.js';
+import { BaseDocsService, BaseSearchArgs } from './base-docs-service.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { MarkdownProcessor } from './preprocessing/markdown-processor.js';
 import { SearchIndexBuilder } from './preprocessing/index-builder.js';
 
-export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
-  private static instance: NodeDocsService;
+// Define Discord.js specific search arguments
+export interface DiscordSearchArgs extends BaseSearchArgs {
+  query: string;
+  category?: 'preparations' | 'creating-your-bot' | 'slash-commands' | 'interactions' | 'message-components' | 'popular-topics' | 'voice' | 'additional-features' | 'improving-dev-environment' | 'miscellaneous';
+}
+
+export class DiscordDocsService extends BaseDocsService<DiscordSearchArgs> {
+  private static instance: DiscordDocsService;
   private readonly docsPath: string;
   private readonly processor: MarkdownProcessor;
   private readonly indexBuilder: SearchIndexBuilder;
-
-  // Map of category names to their directory paths
+  
+  // Map of category names to their directory paths based on Discord.js guide structure
   private readonly categoryPaths = {
-    'core': ['.'],  // All Node.js docs are in the root directory
+    'preparations': ['preparations'],
+    'creating-your-bot': ['creating-your-bot'],
+    'slash-commands': ['slash-commands'],
+    'interactions': ['interactions'],
+    'message-components': ['message-components'],
+    'popular-topics': ['popular-topics'],
+    'voice': ['voice'],
+    'additional-features': ['additional-features'],
+    'improving-dev-environment': ['improving-dev-environment'],
+    'miscellaneous': ['miscellaneous']
   };
 
   private constructor() {
     super();
-    this.docsPath = join(process.cwd(), 'node-docs', 'copy');
+    this.docsPath = join(process.cwd(), 'discord-docs', 'guide');
     this.processor = new MarkdownProcessor(this.docsPath);
     this.indexBuilder = new SearchIndexBuilder(this.docsPath);
     
     // Initialize search index
     this.initialize().catch(error => {
-      this.logger.error('Failed to initialize Node.js docs service:', error);
+      this.logger.error('Failed to initialize Discord.js docs service:', error);
     });
   }
 
@@ -46,23 +61,23 @@ export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
       this.logger.error('Error initializing search index:', error);
       throw new McpError(
         ErrorCode.InternalError,
-        'Failed to initialize Node.js documentation search'
+        'Failed to initialize Discord.js documentation search'
       );
     }
   }
 
-  static getInstance(): NodeDocsService {
-    if (!NodeDocsService.instance) {
-      NodeDocsService.instance = new NodeDocsService();
+  static getInstance(): DiscordDocsService {
+    if (!DiscordDocsService.instance) {
+      DiscordDocsService.instance = new DiscordDocsService();
     }
-    return NodeDocsService.instance;
+    return DiscordDocsService.instance;
   }
 
   protected getServiceName(): string {
-    return 'node';
+    return 'discord';
   }
 
-  async search(args: NodeDocsSearchArgs): Promise<SearchResult[]> {
+  async search(args: DiscordSearchArgs): Promise<SearchResult[]> {
     try {
       // Get cached results if available
       const cacheKey = this.getCacheKey(args);
@@ -71,7 +86,9 @@ export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
         return cachedResults;
       }
 
-      const searchResults = this.indexBuilder.search(args.query);
+      const searchResults = this.indexBuilder.search(args.query, {
+        category: args.category
+      });
 
       // Convert to minimal SearchResult format
       const results = searchResults.map(result => {
@@ -87,8 +104,8 @@ export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
         return {
           title: storedFields.title || 'Untitled',
           url: `file://${join(this.docsPath, storedFields.path)}`,
-          description: result.match, // Already truncated in index-builder
-          category: storedFields.category || 'core',
+          description: result.match,
+          category: storedFields.category || 'uncategorized',
           score: result.score
         };
       });
@@ -100,7 +117,14 @@ export class NodeDocsService extends BaseDocsService<NodeDocsSearchArgs> {
       
       return results;
     } catch (error) {
-      throw this.handleError(error);
+      this.logger.error('Search failed:', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Failed to search Discord.js documentation'
+      );
     }
   }
 }

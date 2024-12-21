@@ -16,6 +16,11 @@ export interface NodeDocsSearchArgs {
   category?: 'core';
 }
 
+export interface DiscordSearchArgs {
+  query: string;
+  category?: 'preparations' | 'creating-your-bot' | 'slash-commands' | 'interactions' | 'message-components' | 'popular-topics' | 'voice' | 'additional-features' | 'improving-dev-environment' | 'miscellaneous';
+}
+
 export interface NoResultsResponse {
   message: string;
   suggestion: string;

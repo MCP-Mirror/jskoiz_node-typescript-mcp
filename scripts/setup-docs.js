@@ -4,9 +4,29 @@ import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { createInterface } from 'readline';
+import { docSources, getSourcePath, getTargetPath } from './docs-config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const selectedDocs = new Set(args);
+
+async function prompt(question) {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise(resolve => {
+    rl.question(question, answer => {
+      rl.close();
+      resolve(answer.toLowerCase());
+    });
+  });
+}
 
 async function ensureDirectoryExists(dir) {
   try {
@@ -16,64 +36,88 @@ async function ensureDirectoryExists(dir) {
   }
 }
 
-async function setupTypescriptDocs() {
-  console.log('Setting up TypeScript documentation...');
-  const tsDocsDir = join(rootDir, 'ts-docs');
-  
-  // Clean existing docs
-  try {
-    await fs.rm(tsDocsDir, { recursive: true, force: true });
-  } catch (err) {
-    // Ignore if directory doesn't exist
+async function setupDocs(sourceKey) {
+  const source = docSources[sourceKey];
+  if (!source) {
+    console.error(`Unknown documentation source: ${sourceKey}`);
+    return;
   }
-  
-  await ensureDirectoryExists(tsDocsDir);
-  
-  // Clone TypeScript docs
-  execSync(
-    'git clone --depth 1 https://github.com/microsoft/TypeScript-Website.git ts-docs/copy',
-    { stdio: 'inherit', cwd: rootDir }
-  );
-  
-  console.log('TypeScript documentation setup complete');
-}
 
-async function setupNodeDocs() {
-  console.log('Setting up Node.js documentation...');
-  const nodeDocsDir = join(rootDir, 'node-docs');
+  console.log(`Setting up ${source.name} documentation...`);
   
-  // Clean existing docs
+  // Clean and create base directory
+  const baseDir = join(rootDir, sourceKey);
   try {
-    await fs.rm(nodeDocsDir, { recursive: true, force: true });
+    await fs.rm(baseDir, { recursive: true, force: true });
   } catch (err) {
     // Ignore if directory doesn't exist
   }
   
-  await ensureDirectoryExists(nodeDocsDir);
+  await ensureDirectoryExists(baseDir);
   
-  // Clone Node.js docs
+  // Clone repository
   execSync(
-    'git clone --depth 1 https://github.com/nodejs/node.git node-docs/temp',
+    `git clone --depth 1 ${source.repo} ${sourceKey}/temp`,
     { stdio: 'inherit', cwd: rootDir }
   );
+
+  // Create target directory
+  const targetDir = getTargetPath(rootDir, source.setup.targetPath);
+  await ensureDirectoryExists(dirname(targetDir));
   
-  // Move only the docs directory
-  await fs.rename(
-    join(rootDir, 'node-docs/temp/doc'),
-    join(rootDir, 'node-docs/copy')
-  );
+  try {
+    // Copy or move the docs
+    const sourcePath = getSourcePath(rootDir, sourceKey, source.setup.sourcePath);
+    await fs.cp(sourcePath, targetDir, { recursive: true });
+  } catch (err) {
+    console.error(`Error copying ${source.name} docs:`, err);
+    throw err;
+  } finally {
+    // Clean up temporary clone
+    await fs.rm(join(rootDir, sourceKey, 'temp'), { recursive: true, force: true });
+  }
   
-  // Clean up temporary clone
-  await fs.rm(join(rootDir, 'node-docs/temp'), { recursive: true });
-  
-  console.log('Node.js documentation setup complete');
+  console.log(`${source.name} documentation setup complete`);
 }
 
 async function main() {
   try {
-    await setupTypescriptDocs();
-    await setupNodeDocs();
-    console.log('Documentation setup completed successfully');
+    // If no docs specified via command line, prompt user
+    if (selectedDocs.size === 0) {
+      console.log('Available documentation sources:');
+      Object.entries(docSources).forEach(([key, source]) => {
+        console.log(`  ${key}: ${source.name}`);
+      });
+      console.log('\nEnter documentation sources to install (space-separated), or "all":');
+      const answer = await prompt('> ');
+      
+      if (answer === 'all') {
+        Object.keys(docSources).forEach(key => selectedDocs.add(key));
+      } else {
+        answer.split(/\s+/).forEach(key => {
+          if (key && docSources[key]) selectedDocs.add(key);
+        });
+      }
+    }
+
+    // Validate selected docs
+    for (const doc of selectedDocs) {
+      if (!docSources[doc]) {
+        console.error(`Unknown documentation source: ${doc}`);
+        process.exit(1);
+      }
+    }
+
+    // Setup selected docs
+    for (const doc of selectedDocs) {
+      await setupDocs(doc);
+    }
+
+    if (selectedDocs.size > 0) {
+      console.log('Documentation setup completed successfully');
+    } else {
+      console.log('No documentation sources selected');
+    }
   } catch (error) {
     console.error('Error setting up documentation:', error);
     process.exit(1);

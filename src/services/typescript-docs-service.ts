@@ -23,7 +23,7 @@ export class TypeScriptDocsService extends BaseDocsService<TypeScriptSearchArgs>
 
   private constructor() {
     super();
-    this.docsPath = join('/Users/jk/Desktop/Cline/MCP', 'ts-docs', 'copy', 'en');
+    this.docsPath = join(process.cwd(), 'ts-docs', 'copy', 'en');
     this.processor = new MarkdownProcessor(this.docsPath);
     this.indexBuilder = new SearchIndexBuilder(this.docsPath);
     
