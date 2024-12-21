@@ -3,11 +3,13 @@
 ## Current Implementation Analysis
 
 The current implementation has several inefficiencies:
+
 1. Full text search across markdown files on every query
 2. Basic string matching without semantic understanding
 3. Limited caching (only final results)
 4. Linear search through file contents
 5. No content preprocessing or indexing
+
 
 ## Proposed Improvements
 
@@ -35,6 +37,7 @@ interface ProcessedDoc {
 ```
 
 2. **Text Indexing**
+
 - Add MiniSearch (lightweight, full-text search engine)
 - Index structure:
   - Primary fields: title, content
@@ -42,11 +45,13 @@ interface ProcessedDoc {
   - Boost important sections (type definitions, examples)
 
 3. **Enhanced Caching**
+
 - Multi-level cache:
   - L1: Search results (current)
   - L2: Processed documents
   - L3: Search index
 - Invalidation strategy based on file modifications
+
 
 ### Implementation Steps
 
@@ -93,6 +98,7 @@ class TypeScriptDocsService {
 ### Phase 2: Vector Database Implementation
 
 1. **Document Chunking**
+
 - Intelligent splitting based on:
   - Semantic boundaries
   - Section headers
@@ -100,9 +106,11 @@ class TypeScriptDocsService {
   - Maximum token limits
 
 2. **Vector Embeddings**
+
 - Use OpenAI embeddings or local alternatives
 - Store embeddings in a vector database
 - Implement hybrid search (keyword + semantic)
+
 
 3. **Architecture**
 ```typescript
@@ -163,29 +171,35 @@ class TypeScriptDocsService {
 ## Benefits
 
 1. **Immediate Improvements (Phase 1)**
+
 - Faster search response times
 - Better result relevance
 - Reduced system resource usage
 - More efficient caching
 
 2. **Vector Search Benefits (Phase 2)**
+
 - Semantic understanding of queries
 - Better handling of conceptual searches
 - Support for natural language queries
 - Improved search accuracy
 
+
 ## Implementation Timeline
 
 1. Phase 1 (1-2 weeks):
+
 - Day 1-2: Set up preprocessing pipeline
 - Day 3-4: Implement text indexing
 - Day 5-7: Enhanced caching system
 - Day 8-10: Testing and optimization
 
 2. Phase 2 (2-3 weeks):
+
 - Week 1: Document chunking and embeddings
 - Week 2: Vector store integration
 - Week 3: Hybrid search implementation
+
 
 ## Getting Started
 
@@ -203,24 +217,29 @@ npm run build-search-index
 ```
 
 2. Monitor and measure improvements:
+
 - Track search response times
 - Measure result relevance
 - Monitor system resource usage
 - Gather user feedback
 
+
 ## Future Considerations
 
 1. **Scalability**
+
 - Distributed vector storage
 - Parallel processing
 - Sharding strategies
 
 2. **Maintenance**
+
 - Automated index updates
 - Monitoring and alerts
 - Performance optimization
 
 3. **Features**
+
 - Query suggestions
 - Related content
 - Search analytics
